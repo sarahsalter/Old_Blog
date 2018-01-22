@@ -1,7 +1,9 @@
 ---
 title: "Data Manipulation with Dplyr"
 author: "Sarah Salter"
-date: "2018-01-22T21:49:57-07:00"
+date: 2018-01-22T21:49:57-07:00
+categories: ["R"]
+tags: ["R Markdown", "dplyr", "data manipulation"]
 ---
 
 ```{r setup, include=FALSE}
