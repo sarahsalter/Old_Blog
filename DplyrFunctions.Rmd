@@ -1,0 +1,255 @@
+---
+title: "Dplyr"
+author: "Sarah Salter"
+date: "January 20, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# References:
+# 1) https://cran.r-project.org/web/packages/dplyr/vignettes/dplyr.html
+# 2)
+```
+
+```{r setup, include=FALSE}
+#Exploring
+install.packages("nycflights13")
+library(nycflights13)
+library(dplyr)
+library(ggplot2)
+dim(flights)
+flights
+colnames(flights)
+
+#Functions
+  #filter() to select cases based on their values.
+  #arrange() to reorder the cases.
+  #select() and rename() to select variables based on their names.
+  #mutate() and transmute() to add new variables that are functions of existing variables.
+  #summarise() to condense multiple values to a single value.
+  #sample_n() and sample_frac() to take random samples.
+
+#Description of Dplyr Functions
+  #At the most basic level, you can only alter a tidy data frame in five useful ways: you can reorder the rows         (arrange()), pick observations and variables of interest (filter() and select()), add new variables that are         functions of existing variables (mutate()), or collapse many values to a summary (summarise()). The remainder of     the language comes from applying the five functions to different types of data. 
+```
+
+
+### Filter Function 
+```{r }
+#Base R code equivalent: flights[flights$month == 1 & flights$day == 1, ]
+dplyr::filter(flights, month == 1, day == 1)
+nrow(filter(flights, month == 1, day == 1)) #842
+nrow(flights[flights$month == 1 & flights$day == 1, ]) #842
+```
+
+
+### Arrange Function 
+```{r }
+#Base R code equivalent: flights[order(flights$year, flights$month, flights$day),]
+dplyr::arrange(flights, year, month, day) #arranges in ascending order by year; then by month for ties; then by day
+#Base R code equivalent: flights[order(desc(flights$year), desc(flights$month), desc(flights$day)),]
+dplyr::arrange(flights, desc(year), desc(month), desc(day)) #arranges in descending order by year; then month; then day
+#Base R code equivalent: flights[order(desc(flights$arr_delay))]
+dplyr::arrange(flights, desc(arr_delay))
+```
+
+
+### Select & Rename Function 
+```{r }
+#Select
+select(flights, year, month, day) #select all of the columns listed 
+select(flights, year, month, day, carrier) #select all of the columns listed
+select(flights, year:day) #select all of the data between year and day
+select(flights, -(year:day)) #select all of the data except the columns including and between year - day
+
+#Helper Functions within Select
+#starts_with(), ends_with(), matches() and contains()
+dplyr::select(flights, starts_with("A")) #chooses all of the colnames that begin with A
+dplyr::select(flights, ends_with("E")) #chooses all of the colanmes that end with an E
+dplyr::select(flights, matches("arr")) 
+dplyr::select(flights, contains("time")) 
+dplyr::select(flights, num_range()) #use this is any of the column names have the same name but different numbers 
+                                    
+df <- as.data.frame(matrix(runif(100), nrow = 10))
+df <- tbl_df(df[c(3, 4, 7, 1, 9, 8, 5, 2, 6, 10)])
+select(df, V4:V6)
+select(df, num_range("V", 4:6)) #select only the columns V4, V5, V6
+
+#Rename
+rename(flights, tail_num = tailnum) #this will rename the variable called tail_num to tailnum without a _ in between
+select(flights, tailnum) #verify to check that it is changed within the database 
+```
+
+
+### Mutate & Transmute Function 
+```{r }
+#Mutate Function: this allows you to add new columns
+#Base R Equivalent: transform()
+mutate(flights,
+  gain = arr_delay - dep_delay,
+  speed = distance / air_time * 60)
+
+mutate(flights,
+  gain = arr_delay - dep_delay,
+  gain_per_hour = gain / (air_time / 60))
+
+#Transmute Function: this only keeps the newly created variables within the dataset
+transmute(flights,
+  gain = arr_delay - dep_delay,
+  gain_per_hour = gain / (air_time / 60))
+```
+
+
+### Summarise Function
+```{r }
+#Summarise Function
+summarise(flights,
+  delay = mean(dep_delay, na.rm = TRUE))
+
+#Summarised & GroupBy Function: First Example
+by_tailnum <- group_by(flights, tailnum) #collaspe the data so that it is organized by tailnum
+                                         #originally there was 336776 rows
+                                         #there are 4044 unique flight tailnumbers 
+                                         #by_tailnum is a database with 4044 rows that corresponds to the unique tail #s
+delay <- summarise(by_tailnum,
+  count = n(),
+  dist = mean(distance, na.rm = TRUE),
+  delay = mean(arr_delay, na.rm = TRUE)) #summarize tells the features that should be displayed within the dataset
+sum(delay$count) #notice that the sum of counts is 336776 which was the number of rows in the original dataset flights                
+delay <- filter(delay, count > 20, dist < 2000) #this only contains 2,962 rows based on the criterion specified in the command
+
+#Plot for the first example 
+ggplot(delay, aes(dist, delay)) +
+  geom_point(aes(size = count), alpha = 1/2) +
+  geom_smooth() +
+  scale_size_area()
+
+#Summarised & GroupBy Function: Second Example
+destinations <- group_by(flights, dest) #note: length(unique(flights$dest)) #105
+                                        #here destinations does not reduce to 105 rows; but once evaluated with summarize it does
+summarise(destinations,         
+  planes = n_distinct(tailnum),  #evaluates the number of planes (tailnumb) & number of flights that go to each possible destination
+  flights = n())
+
+#Summarised & GroupBy Function: Third Example
+#When you group by multiple variables, each summary peels off one level of the grouping. That makes it easy to progressively roll-up a dataset
+#However you need to be careful when progressively rolling up summaries like this: it’s ok for sums and counts, but you need to think about 
+#weighting for means and variances (it’s not possible to do this exactly for medians).
+daily <- group_by(flights, year, month, day)
+(per_day   <- summarise(daily, flights = n())) #this counts the number of flights on the exact same day
+                                               #note: this dataset only includes flights from the year of 2013-- so there are only
+                                               #365 days in this dataset  
+(per_month <- summarise(per_day, flights = sum(flights))) #this counts all of the flights that occur within each given month
+                                                          #note: since we are using per_day we are peeling back a layer to get to month
+(per_year  <- summarise(per_month, flights = sum(flights))) #this counts all of the flights that occur within the year of 2013
+                                                            #note: since we are using per_month we are peeling back a layer to get to year
+```
+
+
+### Sample_n & Sample_frac Function
+```{r }
+#Sample_n: takes a random sample of rows from a fixed number 
+sample_n(flights, 10)
+
+#Sample_frac: takes a random sample of rows from a fixed fraction.
+sample_frac(flights, 0.01)
+```
+
+
+### Selecting Operations
+```{r}
+#These are similar commands- using the variable name or the position of the column name within the dataset 
+select(flights, year)
+select(flights, 1) #in the tibble this command will yield the same information bc year is the first column within the dataset
+select(flights, dep_time)
+select(flights, 4)
+
+#Variables that are column names in the dataset cannot change value when using the select command
+#For instance, to get the year data select(flights, 5) will not extract this information 
+year <- 5
+select(flights, year)
+select(flights, 5)
+
+#Here we select variables that have the letters 'dep' 
+year <- "dep"
+select(flights, starts_with(year))
+
+#Here Year = year & Identify(5) = sched_dep_time
+#Wrap the variable in an identity() call as mentioned above, and as this will bypass column names. 
+year <- 5
+select(flights, year, identity(year))
+
+#Using vars allows for condensed coding so to speak; the dataset reference has 3 variables 
+vars <- c("year", "month")
+select(flights, vars, "day")
+
+#Note: when unquoting the variable with the !! operator. This tells dplyr to bypass the data frame 
+#and to directly look in the context
+flights$vars <- flights$year
+vars <- c("year", "month", "day")
+select(flights, !! vars)
+```
+
+### Mutating Operations 
+```{r}
+#Evaluating the different characteristics of the mutate variable
+df <- select(flights, year:dep_time) #year:dep_time is 1:4 columns 
+mutate(df, "year", 2) #year variable repeats year for all of the rows in the dataset; this is bc "year" was used
+                      #2 repeats 2 for all of the rows in the dataset
+mutate(df, year, 2) #here that is only 5 columns; year is included in vars so it is not printed again
+                    #thus, the year is ignored within the mutate command here 
+mutate(df, year + 10) #the year+10 column literally adds 10 years to the year variable 
+var <- seq(1, nrow(df))
+mutate(df, new = var)
+
+#Evaluating group_by function used for mutating functions 
+df <- select(flights, year:dep_time)
+group_by(df, month) #again, month is ignored because it is included within the df command
+group_by(df, month = as.factor(month)) #here month is changed from an integer to a factor variable 
+group_by(df, day_binned = cut(day, 3))
+
+group_by(df, "month") #this just prints month for every row 
+vars <- c("year", "month", "day") #note: df includes: year, month, day, dep_time therefore year:day is already included 
+group_by_at(df, vars(year:day)) #this seems to provide the same output as group_by(df, month)
+```
+
+### Piping Operations 
+```{r}
+#This prints out all of the commands separately
+a1 <- group_by(flights, year, month, day) #grouping by each specific day of the entire year; prints all of the variables
+a2 <- select(a1, arr_delay, dep_delay) #only prints the 5 variables
+a3 <- summarise(a2,
+                arr = mean(arr_delay, na.rm = TRUE),
+                dep = mean(dep_delay, na.rm = TRUE)) #using the summarize function this only prins a row for each day of the week
+a4 <- filter(a3, arr > 30 | dep > 30)
+
+
+#This evaluates all of the commands at once 
+#If you don’t want to name the intermediate results, you need to wrap the function calls inside each other
+#This is difficult to read because the order of the operations is from inside to out
+filter(
+  summarise(
+    select(
+      group_by(flights, year, month, day),
+      arr_delay, dep_delay
+    ),
+    arr = mean(arr_delay, na.rm = TRUE),
+    dep = mean(dep_delay, na.rm = TRUE)
+  ),
+  arr > 30 | dep > 30
+)
+
+
+#This is an alternative to the code written above
+#Package dplyr provides the %>% operator from magrittr, where x %>% f(y) turns into f(x, y) 
+#Thus you can use it to rewrite multiple operations that you can read left-to-right, top-to-bottom:
+flights %>%
+  group_by(year, month, day) %>%
+  select(arr_delay, dep_delay) %>%
+  summarise(
+    arr = mean(arr_delay, na.rm = TRUE),
+    dep = mean(dep_delay, na.rm = TRUE)
+  ) %>%
+  filter(arr > 30 | dep > 30)
+```
+
