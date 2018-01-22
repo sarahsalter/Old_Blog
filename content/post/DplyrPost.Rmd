@@ -2,7 +2,6 @@
 title: "Data Manipulation with Dplyr"
 author: "Sarah Salter"
 date: "2018-01-22T21:49:57-07:00"
-output: html_document
 ---
 
 ```{r setup, include=FALSE}
